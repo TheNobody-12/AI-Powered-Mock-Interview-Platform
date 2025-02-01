@@ -1,4 +1,3 @@
----
 
 ### **🔹 12-Hour AI Mock Interview Platform Development Plan**
 | **Time** | **Task** | **Tools/Tech** | **Expected Outcome** |
@@ -17,4 +16,127 @@
 | **10:00 - 11:00** | **Testing & Debugging** | Postman, React Testing Library | Fix API & UI bugs |
 | **11:00 - 12:00** | **Final Deployment & Submission** | Google Cloud Run, GitHub | Live working platform |
 
+
+
+
+TASSK
+
+
+### **🔹 GitHub Issues for AI-Powered Mock Interview Platform**  
+
+Here are structured **GitHub issues** to help you **divide and track tasks** while building the project in **12 hours**.  
+
 ---
+
+### **🔹 High-Priority Issues (Core AI & Backend)**
+#### **1️⃣ AI-Generated Interview Questions**  
+📌 **Description**: Integrate **Google Gemini API** to generate **dynamic interview questions** based on job role.  
+📌 **Tech**: Gemini API, Flask/FastAPI  
+📌 **Acceptance Criteria**:  
+- [ ] Fetches **5 relevant questions** per role.  
+- [ ] Uses **Gemini AI** for **contextual, high-quality** responses.  
+- [ ] Returns questions via **REST API**.  
+
+---
+
+#### **2️⃣ Speech-to-Text Processing (Real-Time AI Response Capture)**  
+📌 **Description**: Implement **Google Speech-to-Text API** to transcribe interview responses.  
+📌 **Tech**: Google Cloud Speech-to-Text, Flask  
+📌 **Acceptance Criteria**:  
+- [ ] Captures **audio input** from users.  
+- [ ] Converts speech to **text** in real-time.  
+- [ ] Sends response **to AI evaluator**.  
+
+---
+
+#### **3️⃣ AI Response Evaluation (NLP Scoring System)**  
+📌 **Description**: Analyze user answers for **clarity, relevance, and confidence** using **Vertex AI AutoML NLP**.  
+📌 **Tech**: Vertex AI, BigQuery, Python  
+📌 **Acceptance Criteria**:  
+- [ ] Evaluates **answer quality** (1-10 scale).  
+- [ ] Gives **actionable feedback** (e.g., “Improve clarity by adding examples”).  
+- [ ] Stores results in **BigQuery**.  
+
+---
+
+#### **4️⃣ Facial Emotion Recognition (Engagement Scoring)**  
+📌 **Description**: Implement **Vertex AI AutoML Vision** to detect user emotions.  
+📌 **Tech**: Vertex AI Vision, OpenCV, Flask  
+📌 **Acceptance Criteria**:  
+- [ ] Captures **webcam feed**.  
+- [ ] Detects **confidence, nervousness, engagement**.  
+- [ ] Scores user based on **facial expressions**.  
+
+---
+
+### **🔹 Medium-Priority Issues (Frontend & User Interaction)**  
+#### **5️⃣ Build React.js UI (Minimalist Interview Interface)**  
+📌 **Description**: Create a simple **React-based UI** for users to start mock interviews.  
+📌 **Tech**: React.js, TailwindCSS  
+📌 **Acceptance Criteria**:  
+- [ ] Displays **interview questions**.  
+- [ ] Records **audio/video responses**.  
+- [ ] Shows **real-time AI feedback**.  
+
+---
+
+#### **6️⃣ Develop API Routes (Flask Backend)**  
+📌 **Description**: Implement Flask/FastAPI backend to handle **question fetching, response evaluation, and feedback**.  
+📌 **Tech**: Flask, REST API  
+📌 **Acceptance Criteria**:  
+- [ ] **POST /generate_questions** → Returns **AI-generated interview questions**.  
+- [ ] **POST /evaluate_answer** → Returns **AI feedback on answer**.  
+- [ ] **POST /analyze_emotions** → Returns **facial engagement score**.  
+
+---
+
+#### **7️⃣ Store Interview Data in Google BigQuery**  
+📌 **Description**: Save user **answers, scores, and AI feedback** in **BigQuery** for analytics.  
+📌 **Tech**: Google BigQuery, Apache Spark  
+📌 **Acceptance Criteria**:  
+- [ ] Stores **structured interview responses**.  
+- [ ] Can be **queried for user performance trends**.  
+- [ ] Optimized for **fast retrieval**.  
+
+---
+
+### **🔹 Low-Priority Issues (Enhancements & Optimization)**  
+#### **8️⃣ Leaderboard System (Track Top Performers)**  
+📌 **Description**: Build a leaderboard to **rank users** based on interview scores.  
+📌 **Tech**: Google BigQuery, React.js  
+📌 **Acceptance Criteria**:  
+- [ ] Ranks users based on **AI scores**.  
+- [ ] Updates **dynamically** as users improve.  
+- [ ] Displays **progress history**.  
+
+---
+
+#### **9️⃣ Auto-Scheduling with Google Calendar API**  
+📌 **Description**: Allow users to **schedule mock interviews** with AI.  
+📌 **Tech**: Google Calendar API, React.js  
+📌 **Acceptance Criteria**:  
+- [ ] Lets users pick **time slots**.  
+- [ ] Syncs with **Google Calendar**.  
+- [ ] Sends **reminders via email**.  
+
+---
+
+#### **🔟 Deploy Full Stack Application (Google Cloud Run + Vertex AI)**  
+📌 **Description**: Deploy **backend & AI models** using **Google Cloud Run + Vertex AI Endpoints**.  
+📌 **Tech**: Google Cloud Run, Docker  
+📌 **Acceptance Criteria**:  
+- [ ] Deploys **Flask API** on **Cloud Run**.  
+- [ ] Deploys **AI models** on **Vertex AI Endpoints**.  
+- [ ] Ensures **low-latency AI responses**.  
+
+---
+
+### **🔹 How to Use These GitHub Issues?**
+1️⃣ **Create a GitHub repo** → Add these as issues.  
+2️⃣ **Assign team members** → Based on expertise.  
+3️⃣ **Track progress** → Move issues from **To-Do → In Progress → Done**.  
+4️⃣ **Test frequently** → Use **Postman for APIs, Jest for frontend tests**.  
+5️⃣ **Push final working version** → Deploy using **Google Cloud Run**.  
+
+---
+
