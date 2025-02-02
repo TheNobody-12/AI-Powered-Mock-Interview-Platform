@@ -1,5 +1,24 @@
-version: '3.8'
+version: '3'
 services:
+  server:
+    build: ./server
+    ports:
+      - "5000:5000"
+    environment:
+      # You can pass environment variables here or use a .env file
+      - GOOGLE_APPLICATION_CREDENTIALS='config\\Key.json'
+      - GEMINI_API_KEY=AIzaSyDLFxz-0N5fAm7EoL17UispDkPf15TGNEE
+      - SECRET_KEY=your_secret_key
+    volumes:
+      - ./server:/app  # Optional: mount your server code for live development
+
+  client:
+    build: ./client
+    ports:
+      - "3000:80"  # Maps container's port 80 to host port 3000 for the React app
+    volumes:
+      - ./client:/app  # Optional: mount your client code for live development
+
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
     container_name: zookeeper
