@@ -104,12 +104,13 @@ def process_audio(audio_bytes):
         )
         response = client.recognize(config=config, audio=audio_config)
         if response.results:
+           
             # Instead of overwriting, append each transcription segment.
-            transcript_piece = response.results[0].alternatives[0].transcript
-            latest_transcript = transcript_piece  # For live display (optional)
-            candidate_answer += " " + transcript_piece
-            print(f"📜 Accumulated Transcript: {candidate_answer}")
-            socketio.emit("update", {"transcript": candidate_answer})
+           transcript_piece = response.results[0].alternatives[0].transcript
+           candidate_answer += " " + transcript_piece  # accumulate for feedback later if needed
+           print(f"📜 New Transcript Segment: {transcript_piece}")
+           socketio.emit("update", {"transcript": transcript_piece})
+
     except Exception as e:
         print(f"❌ Error processing audio: {e}")
         socketio.emit("error", {"error": str(e)})
