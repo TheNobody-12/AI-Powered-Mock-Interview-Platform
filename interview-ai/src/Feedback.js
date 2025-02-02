@@ -1,10 +1,15 @@
 import React from "react";
+import ReactMarkdown from "react-markdown";
 
 function Feedback({ feedback }) {
   return (
     <div>
       <h2 className="h5">AI Feedback</h2>
-      <p>{feedback}</p>
+      <div className="mt-2">
+        <ReactMarkdown>
+          {feedback}
+        </ReactMarkdown>
+      </div>
     </div>
   );
 }
