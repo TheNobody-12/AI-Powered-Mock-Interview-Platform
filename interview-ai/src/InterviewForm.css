@@ -1,0 +1,191 @@
+/* Main container styling */
+.interview-form-container {
+    min-height: 100vh;
+    margin-top: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    background-image: 
+      radial-gradient(circle at 10% 20%, rgba(91, 173, 254, 0.1) 0%, transparent 20%),
+      radial-gradient(circle at 90% 80%, rgba(134, 239, 172, 0.1) 0%, transparent 20%);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  
+  /* Card styling */
+  .interview-form-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 800px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .interview-form-card:hover {
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+  }
+  
+  /* Header styling */
+  .form-header {
+    padding: 2rem 2rem 1rem;
+    background: linear-gradient(135deg, #6B73FF 0%, #000DFF 100%);
+    color: white;
+    text-align: center;
+  }
+  
+  .form-header h2 {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 700;
+  }
+  
+  .form-header .subtitle {
+    margin: 0.5rem 0 0;
+    opacity: 0.9;
+    font-size: 1rem;
+  }
+  
+  /* Form body styling */
+  .interview-form {
+    padding: 2rem;
+  }
+  
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #2d3748;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+  }
+  
+  .form-control:focus {
+    border-color: #4299e1;
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+    outline: none;
+  }
+  
+  textarea.form-control {
+    min-height: 120px;
+    resize: vertical;
+  }
+  
+  /* File input styling */
+  .file-input-container {
+    position: relative;
+  }
+  
+  .file-input-label {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: #f7fafc;
+    border: 1px dashed #cbd5e0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .file-input-label:hover {
+    background: #edf2f7;
+    border-color: #a0aec0;
+  }
+  
+  .file-input-text {
+    margin-left: 0.5rem;
+    color: #4a5568;
+  }
+  
+  /* Submit button styling */
+  .submit-button {
+    width: 100%;
+    padding: 1rem;
+    background: linear-gradient(135deg, #6B73FF 0%, #000DFF 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  
+  .submit-button:hover {
+    background: linear-gradient(135deg, #5a63f0 0%, #0008d9 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 13, 255, 0.2);
+  }
+  
+  .submit-button:disabled {
+    background: #a0aec0;
+    transform: none;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+  
+  /* Spinner animation */
+  .spinner {
+    width: 1rem;
+    height: 1rem;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 1s ease-in-out infinite;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  /* Error message styling */
+  .error-message {
+    margin: 1rem 2rem;
+    padding: 1rem;
+    background: #fff5f5;
+    color: #e53e3e;
+    border-left: 4px solid #e53e3e;
+    border-radius: 4px;
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .interview-form-container {
+      padding: 1rem;
+    }
+    
+    .interview-form-card {
+      border-radius: 12px;
+    }
+    
+    .form-header, .interview-form {
+      padding: 1.5rem;
+    }
+  }
+  
+  /* Floating animation for visual interest */
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  
+  .icon {
+    animation: float 3s ease-in-out infinite;
+  }

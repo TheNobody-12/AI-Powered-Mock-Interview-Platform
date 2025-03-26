@@ -1,0 +1,39 @@
+/* Navbar scroll effect */
+.navbar-scrolled {
+    background-color: rgba(13, 110, 253, 0.95) !important;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease;
+  }
+  
+  /* Active link indicator */
+  .nav-link.active {
+    font-weight: 600;
+    position: relative;
+  }
+  
+  .nav-link.active:after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 2px;
+    background: white;
+  }
+  
+  /* Mobile menu adjustments */
+  @media (max-width: 991.98px) {
+    .navbar-collapse {
+      padding: 1rem 0;
+    }
+    
+    .nav-item {
+      margin: 0.25rem 0;
+    }
+    
+    .btn-outline-light {
+      margin-left: 0 !important;
+      width: 100%;
+    }
+  }
