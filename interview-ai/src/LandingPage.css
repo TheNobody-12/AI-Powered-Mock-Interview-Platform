@@ -1,0 +1,58 @@
+.landing-container {
+    font-family: 'Arial', sans-serif;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  .hero-section {
+    text-align: center;
+    padding: 80px 20px;
+    background: linear-gradient(135deg, #6e8efb, #a777e3);
+    color: white;
+    border-radius: 10px;
+    margin-top: 60px;
+    margin-bottom: 40px;
+  }
+  
+  .hero-section h1 {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+  }
+  
+  .cta-button {
+    background: white;
+    color: #6e8efb;
+    border: none;
+    padding: 12px 30px;
+    font-size: 1.1rem;
+    border-radius: 30px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 20px;
+  }
+  
+  .features-section {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 40px;
+  }
+  
+  .feature {
+    flex: 1;
+    padding: 20px;
+    text-align: center;
+  }
+  
+  .how-it-works {
+    background: #f5f7fa;
+    padding: 40px;
+    border-radius: 10px;
+    margin-bottom: 40px;
+  }
+  
+  .footer {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+  }

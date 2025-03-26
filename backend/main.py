@@ -22,10 +22,6 @@ from datetime import datetime
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 import requests
-from face_analysis import FaceAnalyzer
-import numpy as np
-import cv2
-
 
 load_dotenv()
 
@@ -33,10 +29,6 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")  # Changed to threading mode
-
-# Initialize the analyzer
-face_analyzer = FaceAnalyzer()
-
 
 # Configure upload folder
 UPLOAD_FOLDER = tempfile.gettempdir()
@@ -178,55 +170,8 @@ Return only **valid JSON** in the following format, with **exactly** 10 question
         print(f"Error in question generation: {e}")
         raise
 
-#  Modify the process_video function
-def process_video(image_bytes):
-    global latest_positivity_score
-    
-    try:
-        # Convert bytes to numpy array
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        if frame is None:
-            raise ValueError("Could not decode image")
-            
-        # Analyze the frame
-        analysis = face_analyzer.analyze_frame(frame)
-        
-        # Get smoothed scores
-        engagement_score, positivity_score = face_analyzer.get_smoothed_scores()
-        
-        # Update global variables
-        latest_positivity_score = positivity_score
-        
-        # Send updates via Kafka
-        producer.send('interview_updates', {
-            'engagement_score': engagement_score,
-            'positivity_score': positivity_score,
-            'emotion': analysis['emotion'],
-            'timestamp': datetime.now().isoformat()
-        })
-        
-        return True
-        
-    except Exception as e:
-        producer.send('interview_errors', {
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        })
-        return False
 
-# Add a new endpoint to get current engagement metrics
-@app.route('/get_engagement_metrics', methods=['GET'])
-def get_engagement_metrics():
-    engagement, positivity = face_analyzer.get_smoothed_scores()
-    return jsonify({
-        'engagement_score': engagement,
-        'positivity_score': positivity,
-        'timestamp': datetime.now().isoformat()
-    })
-
-# Modify the Kafka consumer to handle engagement updates
+# Kafka Consumer Function
 def kafka_consumer():
     consumer = KafkaConsumer(
         'interview_updates',
@@ -237,19 +182,9 @@ def kafka_consumer():
     for message in consumer:
         data = message.value
         if 'transcript' in data:
-            socketio.emit('update', {
-                'type': 'transcript',
-                'data': data['transcript']
-            })
-        elif 'engagement_score' in data:
-            socketio.emit('update', {
-                'type': 'metrics',
-                'data': {
-                    'engagement': data['engagement_score'],
-                    'positivity': data['positivity_score'],
-                    'emotion': data.get('emotion', 'neutral')
-                }
-            })
+            socketio.emit('update', {'transcript': data['transcript']})
+        elif 'positivity_score' in data:
+            socketio.emit('update', {'positivity_score': data['positivity_score']})
 
 # Start Kafka consumer in a separate thread
 kafka_thread = threading.Thread(target=kafka_consumer)
@@ -260,56 +195,109 @@ kafka_thread.start()
 def convert_audio(audio_bytes):
     audio = AudioSegment.from_wav(io.BytesIO(audio_bytes))
     if audio.channels > 1:
-        audio = audio.set_channels(1)
-    audio = audio.set_frame_rate(16000)
+        audio = audio.set_channels(1)  # Convert to mono
+    audio = audio.set_frame_rate(16000)  # Standard sample rate for speech recognition
+    audio = audio.set_sample_width(2)  # 16-bit samples
+    audio = audio.high_pass_filter(80)  # Remove low-frequency noise
+    audio = audio.low_pass_filter(8000)  # Remove high-frequency noise
     buffer = io.BytesIO()
-    audio.export(buffer, format="wav")
+    audio.export(buffer, format="wav", parameters=[
+        "-ac", "1",          # Mono channel
+        "-ar", "16000",      # Sample rate
+        "-acodec", "pcm_s16le"  # 16-bit PCM
+    ])
     return buffer.getvalue()
 
 def process_audio(audio_bytes):
     global latest_transcript, candidate_answer
     try:
         mono_audio = convert_audio(audio_bytes)
-        producer.send('audio_stream', {'audio': base64.b64encode(mono_audio).decode('utf-8')})
+        
+        # Send larger chunks (3 seconds instead of 2)
+        producer.send('audio_stream', {
+            'audio': base64.b64encode(mono_audio).decode('utf-8'),
+            'chunk_size': len(mono_audio)
+        })
         
         client = speech.SpeechClient()
         audio = speech.RecognitionAudio(content=mono_audio)
+        
+        # Enhanced recognition config
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=16000,
             language_code="en-US",
+            enable_automatic_punctuation=True,
+            model="latest_long",  # Use latest long-form model
+            use_enhanced=True,    # Use enhanced model
+            audio_channel_count=1,
+            enable_word_confidence=True,
+            enable_word_time_offsets=True
         )
-        response = client.recognize(config=config, audio=audio)
+        
+        # Use streaming recognition for better results
+        operation = client.long_running_recognize(config=config, audio=audio)
+        response = operation.result(timeout=10)
+        
         if response.results:
-            transcript_piece = response.results[0].alternatives[0].transcript
+            transcript_piece = " ".join([result.alternatives[0].transcript 
+                                      for result in response.results])
             candidate_answer += " " + transcript_piece
             producer.send('interview_updates', {
                 'transcript': transcript_piece,
-                'positivity_score': latest_positivity_score
+                'positivity_score': latest_positivity_score,
+                'is_final': True  # Indicate this is a finalized transcript
             })
+            
+    except Exception as e:
+        producer.send('interview_errors', {
+            'error': str(e),
+            'type': 'audio_processing'
+        })
+
+def preprocess_audio(audio_bytes):
+    """Additional audio preprocessing"""
+    audio = AudioSegment.from_wav(io.BytesIO(audio_bytes))
+    
+    # Normalize volume
+    audio = audio.normalize()
+    
+    # Apply noise reduction
+    audio = audio.low_pass_filter(8000).high_pass_filter(80)
+    
+    # Boost speech frequencies
+    audio = audio.equalize(
+        AudioSegment.Equalizer().frequencies(
+            (300, 2),  # Boost 300Hz range
+            (1000, 3),  # Boost 1kHz range
+            (3000, 3)   # Boost 3kHz range
+        )
+    )
+    
+    buffer = io.BytesIO()
+    audio.export(buffer, format="wav")
+    return buffer.getvalue()
+
+def process_video(image_bytes):
+    global latest_positivity_score
+    try:
+        producer.send('video_stream', {'image': base64.b64encode(image_bytes).decode('utf-8')})
+        
+        client = vision.ImageAnnotatorClient()
+        image = vision.Image(content=image_bytes)
+        response = client.face_detection(image=image)
+        if response.face_annotations:
+            face = response.face_annotations[0]
+            emotions = {
+                "joy": face.joy_likelihood,
+                "anger": face.anger_likelihood,
+                "sorrow": face.sorrow_likelihood,
+            }
+            positivity_score = (emotions["joy"] - emotions["anger"] - emotions["sorrow"]) / 4
+            latest_positivity_score = max(0, min(1, positivity_score))
+            producer.send('interview_updates', {'positivity_score': latest_positivity_score})
     except Exception as e:
         producer.send('interview_errors', {'error': str(e)})
-
-# def process_video(image_bytes):
-#     global latest_positivity_score
-#     try:
-#         producer.send('video_stream', {'image': base64.b64encode(image_bytes).decode('utf-8')})
-        
-#         client = vision.ImageAnnotatorClient()
-#         image = vision.Image(content=image_bytes)
-#         response = client.face_detection(image=image)
-#         if response.face_annotations:
-#             face = response.face_annotations[0]
-#             emotions = {
-#                 "joy": face.joy_likelihood,
-#                 "anger": face.anger_likelihood,
-#                 "sorrow": face.sorrow_likelihood,
-#             }
-#             positivity_score = (emotions["joy"] - emotions["anger"] - emotions["sorrow"]) / 4
-#             latest_positivity_score = max(0, min(1, positivity_score))
-#             producer.send('interview_updates', {'positivity_score': latest_positivity_score})
-#     except Exception as e:
-#         producer.send('interview_errors', {'error': str(e)})
 
 #  Routes
 @app.route('/generate_questions', methods=['POST'])
@@ -392,8 +380,29 @@ def generate_questions_endpoint():
 def handle_audio():
     if 'audio' not in request.files:
         return jsonify({"error": "No audio file"}), 400
-    threading.Thread(target=process_audio, args=(request.files['audio'].read(),)).start()
-    return jsonify({"status": "processing"})
+    
+    try:
+        audio_bytes = request.files['audio'].read()
+        
+        # Add preprocessing
+        processed_audio = preprocess_audio(audio_bytes)
+        
+        # Process in background with error handling
+        threading.Thread(
+            target=process_audio,
+            args=(processed_audio,),
+            daemon=True
+        ).start()
+        
+        return jsonify({
+            "status": "processing",
+            "chunk_size": len(processed_audio)
+        })
+    except Exception as e:
+        return jsonify({
+            "error": "Audio processing failed",
+            "details": str(e)
+        }), 500
 
 @app.route('/send_video', methods=['POST'])
 def handle_video():
