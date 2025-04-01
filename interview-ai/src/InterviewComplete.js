@@ -35,10 +35,52 @@ const styles = StyleSheet.create({
   icon: { width: 20, height: 20, borderRadius: 10, marginRight: 8, textAlign: 'center' },
   strengthIcon: { backgroundColor: '#2ecc71', color: 'white' },
   improvementIcon: { backgroundColor: '#e74c3c', color: 'white' },
-  questionItem: { marginBottom: 15, padding: 15, border: '1px solid #ddd', borderRadius: 8 },
-  questionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  questionNumber: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#3498db', color: 'white', textAlign: 'center', marginRight: 10, fontWeight: 'bold' },
-  questionText: { fontSize: 12, fontWeight: 'bold', flex: 1 },
+  // Improved question item styling
+  questionItem: {
+    marginBottom: 20,
+    padding: 15,
+    border: '1px solid #e0e0e0',
+    borderRadius: 8,
+    breakInside: 'avoid',
+    pageBreakInside: 'avoid'
+  },
+
+  // Better feedback section
+  feedbackSection: {
+    marginTop: 15,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 6,
+    borderLeft: '3px solid #3498db'
+  },
+
+  // Improved suggested answer section
+  suggestionSection: {
+    marginTop: 15,
+    padding: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 6,
+    borderLeft: '3px solid #2ecc71'
+  },
+
+  // Section headers
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+
+  // Better spacing for content
+  contentText: {
+    fontSize: 12,
+    lineHeight: 1.5,
+    marginBottom: 8
+  },
+
+  // Add more vertical space between questions
+  questionsContainer: {
+    marginTop: 15
+  },
   feedbackContent: { marginTop: 10, padding: 10, backgroundColor: '#f8f9fa', borderRadius: 4 },
   pageNumber: { position: 'absolute', bottom: 20, right: 30, fontSize: 10, color: '#7f8c8d' }
 });
@@ -125,38 +167,55 @@ const InterviewReport = ({ interviewData, feedbackData, avgTechnical, avgCommuni
       </View>
 
       {interviewData?.questions && (
+        // Updated PDF Question Review Section
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Question Review</Text>
-          {interviewData.questions.map((question, index) => (
-            <View key={index} style={styles.questionItem} wrap={false}>
-              <View style={styles.questionHeader}>
-                <View style={styles.questionNumber}>
-                  <Text>Q{index + 1}</Text>
+          <View style={styles.questionsContainer}>
+            {interviewData.questions.map((question, index) => (
+              <View key={index} style={styles.questionItem} wrap={false}>
+                <View style={styles.questionHeader}>
+                  <View style={styles.questionNumber}>
+                    <Text>Q{index + 1}</Text>
+                  </View>
+                  <Text style={styles.questionText}>{question.question}</Text>
                 </View>
-                <Text style={styles.questionText}>{question.question}</Text>
-              </View>
 
-              {feedbackData[index] && (
-                <>
-                  <View style={styles.feedbackContent}>
-                    <Text style={{ fontWeight: 'bold' }}>Feedback:</Text>
-                    <Text>{feedbackData[index].concise_feedback}</Text>
-                  </View>
-                  <View style={styles.feedbackContent}>
-                    <Text style={{ fontWeight: 'bold' }}>Suggested Answer:</Text>
-                    <Text>{feedbackData[index].suggested_answer}</Text>
-                  </View>
-                </>
-              )}
-            </View>
-          ))}
+                {feedbackData[index] && (
+                  <>
+                    <View style={styles.feedbackSection}>
+                      <View style={styles.sectionHeader}>
+                        <Text style={{ fontWeight: 'bold' }}>Feedback:</Text>
+                      </View>
+                      <Text style={styles.contentText}>
+                        {feedbackData[index].concise_feedback}
+                      </Text>
+                    </View>
+
+                    <View style={styles.suggestionSection}>
+                      <View style={styles.sectionHeader}>
+                        <Text style={{ fontWeight: 'bold' }}>Suggested Answer:</Text>
+                      </View>
+                      <Text style={styles.contentText}>
+                        {feedbackData[index].suggested_answer.split('\n').map((paragraph, i) => (
+                          <Text key={i}>
+                            {paragraph}
+                            {'\n\n'}
+                          </Text>
+                        ))}
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </View>
+            ))}
+          </View>
         </View>
       )}
 
       <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => (
         `${pageNumber} / ${totalPages}`
       )} fixed />
-     </Page>
+    </Page>
   </Document>
 );
 

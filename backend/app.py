@@ -22,7 +22,11 @@ from datetime import datetime
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 import requests
-
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+import jwt
+import datetime
+from functools import wraps
 import cv2
 from PIL import Image
 import numpy as np
@@ -37,7 +41,33 @@ load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL", "sqlite:///site.db")
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://localhost:3000"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["X-Custom-Header"],
+        "supports_credentials": True,  # If using cookies/auth
+        "max_age": 86400  # Cache preflight for 24 hours
+    },
+    r"/generate_questions": {
+        "origins": ["http://localhost:3000"],  # Your React app's origin
+        "methods": ["POST", "OPTIONS"],  # Allowed methods
+        "allow_headers": ["Content-Type"]
+    },
+    r"/*": {  # Apply to all routes
+        "origins": ["http://localhost:3000"],  # Your React app
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
+
+
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")  # Changed to threading mode
 
 # Initialize Face Analysis components
@@ -187,6 +217,36 @@ class FaceAnalyzer:
 
 # Initialize analyzer
 analyzer = FaceAnalyzer()
+
+# User Model
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100))
+    email = db.Column(db.String(100), unique=True)
+    password = db.Column(db.String(200))
+
+    def __repr__(self):
+        return f'<User {self.email}>'
+
+
+# Create tables
+with app.app_context():
+    db.create_all()
+
+# Auth Decorator
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({'message': 'Token is missing!'}), 401
+        try:
+            data = jwt.decode(token.split()[1], app.config['SECRET_KEY'], algorithms=["HS256"])
+            current_user = User.query.get(data['user_id'])
+        except:
+            return jsonify({'message': 'Token is invalid!'}), 401
+        return f(current_user, *args, **kwargs)
+    return decorated
 
 def process_frames():
     """Worker thread for processing frames"""
@@ -712,6 +772,51 @@ def get_current_question():
         "question": interview_questions[current_question_index] if interview_questions else "",
         "index": current_question_index,
         "total": len(interview_questions)
+    })
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
+    
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': 'Email already exists'}), 400
+        
+    new_user = User(
+        name=data['name'],
+        email=data['email'],
+        password=hashed_password
+    )
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({'message': 'Registered successfully'}), 201
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    user = User.query.filter_by(email=data['email']).first()
+    
+    if not user or not check_password_hash(user.password, data['password']):
+        return jsonify({'error': 'Invalid credentials'}), 401
+    
+    token = jwt.encode({
+        'user_id': user.id,
+        'exp': datetime.datetime.now() + datetime.timedelta(hours=24)
+    }, app.config['SECRET_KEY'])
+    
+    return jsonify({
+        'token': token,
+        'user_id': user.id,
+        'name': user.name
+    })
+
+@app.route('/api/check-auth', methods=['GET'])
+@token_required
+def check_auth(current_user):
+    return jsonify({
+        'authenticated': True,
+        'user_id': current_user.id,
+        'name': current_user.name
     })
 
 

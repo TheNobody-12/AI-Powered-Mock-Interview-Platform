@@ -36,7 +36,6 @@ function LiveInterview({ interviewData }) {
   const webcamRef = useRef(null);
   const socket = useRef(null);
   const videoIntervalRef = useRef(null);
-  const transcriptEndRef = useRef(null);
   const [retryCount, setRetryCount] = useState(0);
 
   // Engagement tips based on score
