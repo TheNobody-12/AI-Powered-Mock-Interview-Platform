@@ -30,6 +30,7 @@ function LiveInterview({ interviewData }) {
   const [allFeedback, setAllFeedback] = useState([]);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [videoProcessing, setVideoProcessing] = useState(false);
+  const [engagementTips, setEngagementTips] = useState([]);
 
   const mediaRecorder = useRef(null);
   const webcamRef = useRef(null);
@@ -38,6 +39,28 @@ function LiveInterview({ interviewData }) {
   const transcriptEndRef = useRef(null);
   const [retryCount, setRetryCount] = useState(0);
 
+  // Engagement tips based on score
+  const tips = {
+    low: [
+      "Try to maintain eye contact with the camera",
+      "Speak with more energy and enthusiasm",
+      "Use hand gestures to emphasize points",
+      "Smile more to appear more approachable"
+    ],
+    medium: [
+      "Vary your tone of voice to keep it interesting",
+      "Structure your answers with clear points",
+      "Include relevant examples from your experience",
+      "Maintain good posture throughout"
+    ],
+    high: [
+      "Great job! Keep this energy",
+      "Consider adding more technical details",
+      "Relate answers back to company values",
+      "Ask thoughtful questions when appropriate"
+    ]
+  };
+
   // Initialize component
   useEffect(() => {
     console.log("Received interview data:", interviewData);
@@ -45,6 +68,18 @@ function LiveInterview({ interviewData }) {
       setLoading(false);
     }
   }, [interviewData]);
+
+  // Update engagement tips when score changes
+  useEffect(() => {
+    if (engagementScore < 40) {
+      setEngagementTips(tips.low);
+    } else if (engagementScore < 70) {
+      setEngagementTips(tips.medium);
+    } else {
+      setEngagementTips(tips.high);
+    }
+  }, [engagementScore]);
+
 
   const getCurrentQuestion = () => {
     try {
@@ -94,7 +129,7 @@ function LiveInterview({ interviewData }) {
             .replace(/([.!?])\s*/g, '$1 ')
             .replace(/\s+/g, ' ')
             .trim();
-          
+
           setTranscript(prev => {
             const updated = prev ? `${prev} ${cleanTranscript}` : cleanTranscript;
             return updated.replace(/\s+/g, ' '); // Ensure single spaces
@@ -120,7 +155,7 @@ function LiveInterview({ interviewData }) {
         const emotionWeights = {
           happy: 1.0,
           surprise: 0.8,
-          neutral: 0.5,
+          neutral: 0.8,
           sad: 0.3,
           angry: 0.1,
           fear: 0.2,
@@ -379,8 +414,11 @@ function LiveInterview({ interviewData }) {
     <div className="live-interview-container">
       {loading ? (
         <div className="loading-screen">
-          <h2>Preparing your interview questions...</h2>
-          <div className="spinner"></div>
+          <div className="loading-content">
+            <h2>Preparing your interview questions...</h2>
+            <div className="spinner"></div>
+            <p className="loading-tip">Tip: Take deep breaths and relax before starting</p>
+          </div>
         </div>
       ) : (
         <div className="interview-layout">
@@ -390,6 +428,7 @@ function LiveInterview({ interviewData }) {
               <button
                 className="sidebar-toggle"
                 onClick={() => setSidebarOpen(false)}
+                aria-label="Close sidebar"
               >
                 &times;
               </button>
@@ -418,12 +457,14 @@ function LiveInterview({ interviewData }) {
               <button
                 className="sidebar-toggle closed"
                 onClick={() => setSidebarOpen(true)}
+                aria-label="Open sidebar"
               >
                 ☰ Show Questions
               </button>
             )}
 
             <div className="connection-status" data-status={connectionStatus}>
+              <span className="status-indicator"></span>
               {connectionStatus === "connected" ? "Live Analysis Active" :
                 connectionStatus === "error" ? "Analysis Disconnected" : "Connecting..."}
             </div>
@@ -431,11 +472,13 @@ function LiveInterview({ interviewData }) {
             <div className="interview-card">
               <div className="interview-header">
                 <h2>Mock Interview Session</h2>
-                <div className="progress-indicator">
-                  Question {currentQuestionIndex + 1} of {interviewData?.questions?.length || 0}
-                </div>
-                <div className="question-role">
-                  Role: {interviewData?.jobRole || "N/A"}
+                <div className="header-meta">
+                  <div className="progress-indicator">
+                    Question {currentQuestionIndex + 1} of {interviewData?.questions?.length || 0}
+                  </div>
+                  <div className="question-role">
+                    Role: {interviewData?.jobRole || "N/A"}
+                  </div>
                 </div>
               </div>
 
@@ -460,8 +503,10 @@ function LiveInterview({ interviewData }) {
                       height: 480,
                       facingMode: 'user'
                     }}
+                    aria-label="Webcam feed"
                   />
                   <div className="recording-indicator" data-recording={recording}>
+                    <span className="indicator-dot"></span>
                     {recording ? "RECORDING" : "PAUSED"}
                   </div>
                 </div>
@@ -472,6 +517,7 @@ function LiveInterview({ interviewData }) {
                       onClick={startRecording}
                       disabled={recording || connectionStatus !== "connected"}
                       className="btn-record-start"
+                      aria-label="Start recording"
                     >
                       <i className="icon-mic"></i> Start Answer
                     </button>
@@ -479,6 +525,7 @@ function LiveInterview({ interviewData }) {
                       onClick={stopRecording}
                       disabled={!recording}
                       className="btn-record-stop"
+                      aria-label="Stop recording"
                     >
                       <i className="icon-stop"></i> Stop Answer
                     </button>
@@ -486,6 +533,7 @@ function LiveInterview({ interviewData }) {
                       onClick={handleSkipQuestion}
                       className="btn-skip"
                       disabled={recording}
+                      aria-label="Skip question"
                     >
                       Skip Question
                     </button>
@@ -493,59 +541,90 @@ function LiveInterview({ interviewData }) {
 
                   <div className="metrics-display">
                     <div className="metric">
-                      <span className="metric-label">Positivity</span>
-                      <div className="score-bar">
+                      <div className="metric-header">
+                        <span className="metric-label">Positivity</span>
+                        <span className="metric-value">{positivityScore}%</span>
+                      </div>
+                      <div className="score-bar-container">
                         <div
-                          className="score-fill"
+                          className="score-fill positivity-fill"
                           style={{ width: `${positivityScore}%` }}
                         ></div>
-                        <span className="score-value">{positivityScore}%</span>
                       </div>
                       <div className="emotion-indicator">
-                        {positivityScore > 50 ? "😊" :
-                          positivityScore > 30 ? "😐" : "😞"}
+                        {positivityScore > 70 ? "😊" :
+                          positivityScore > 40 ? "😐" : "😞"}
                       </div>
                     </div>
                     <div className="metric">
-                      <span className="metric-label">Engagement</span>
-                      <div className="score-bar">
+                      <div className="metric-header">
+                        <span className="metric-label">Engagement</span>
+                        <span className="metric-value">{engagementScore}%</span>
+                      </div>
+                      <div className="score-bar-container">
                         <div
-                          className="score-fill"
+                          className="score-fill engagement-fill"
                           style={{ width: `${engagementScore}%` }}
                         ></div>
-                        <span className="score-value">{engagementScore}%</span>
                       </div>
                     </div>
                     <div className="metric">
                       <span className="metric-label">Analysis</span>
                       <div className="update-indicator" data-active={lastUpdate > Date.now() - 4000}>
+                        <span className="indicator-dot"></span>
                         {lastUpdate > Date.now() - 4000 ? "Live" : "Paused"}
                       </div>
                     </div>
+                  </div>
+
+                  <div className="engagement-tips">
+                    <h4>Tips to Improve:</h4>
+                    <ul>
+                      {engagementTips.map((tip, index) => (
+                        <li key={index}>{tip}</li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               </div>
 
               <div className="transcript-container">
-                <h3>Live Transcript:</h3>
+                <div className="transcript-header">
+                  <h3>Live Transcript:</h3>
+                  <button
+                    className="btn-clear-transcript"
+                    onClick={() => setTranscript("")}
+                    disabled={!transcript}
+                  >
+                    Clear
+                  </button>
+                </div>
                 <div className="transcript-box">
                   {transcript ? (
                     <div className="transcript-flow">
-                      {transcript.split(' ').map((word, index) => (
+                    {transcript
+                      .replace(/\n/g, ' ')  // Remove newlines
+                      .replace(/\s+/g, ' ')  // Collapse multiple spaces
+                      .trim()                // Trim whitespace
+                      .split(' ')
+                      .map((word, index, array) => (
                         <span key={index} className="transcript-word">
                           {word}
-                          {index < transcript.split(' ').length - 1 ? ' ' : ''}
+                          {index < array.length - 1 ? ' ' : ''}
                         </span>
                       ))}
-                    </div>
+                  </div>
                   ) : (
-                    <span className="empty-transcript">Your response will appear here...</span>
+                    <div className="empty-transcript">
+                      <p>Your response will appear here...</p>
+                      <p className="hint">Start speaking when you click "Start Answer"</p>
+                    </div>
                   )}
                 </div>
               </div>
 
               {loadingFeedback ? (
-                <div className="loading-feedback">
+                <div className="feedback-loading">
                   <div className="spinner"></div>
                   <p>Analyzing your response...</p>
                 </div>
@@ -562,6 +641,7 @@ function LiveInterview({ interviewData }) {
                 <button
                   onClick={handleExit}
                   className="btn-exit"
+                  aria-label="Exit interview"
                 >
                   Exit Interview
                 </button>
@@ -569,6 +649,7 @@ function LiveInterview({ interviewData }) {
                   onClick={moveToNextQuestion}
                   disabled={recording}
                   className="btn-next"
+                  aria-label="Next question"
                 >
                   {currentQuestionIndex < (interviewData?.questions?.length || 0) - 1
                     ? "Next Question"
