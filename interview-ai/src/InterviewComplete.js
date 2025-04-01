@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import './InterviewComplete.css';
 
@@ -8,6 +8,16 @@ const InterviewComplete = () => {
   const { interviewData = {}, feedbackData = [] } = location.state || {};
 
   // Calculate average scores
+
+  const [expandedItems, setExpandedItems] = useState({});
+
+  const toggleExpand = (index) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
+
   const averageScores = feedbackData.reduce(
     (acc, feedback) => {
       if (feedback) {
@@ -132,26 +142,53 @@ const InterviewComplete = () => {
       </div>
 
       {interviewData?.questions && (
-        <div className="question-review">
-          <h2>Question Review</h2>
-          <div className="questions-list">
-            {interviewData.questions.map((question, index) => (
-              <div key={index} className="question-item">
-                <h4>Question {index + 1}: {question.question}</h4>
-                {feedbackData[index] && (
-                  <>
-                    <p className="feedback-text">
-                      <strong>Feedback:</strong> {feedbackData[index].concise_feedback}
-                    </p>
-                    <p className="suggested-answer">
-                      <strong>Suggested Answer:</strong> {feedbackData[index].suggested_answer}
-                    </p>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+       <div className="question-review">
+       <h2>Question Review</h2>
+       <div className="questions-list">
+         {interviewData.questions.map((question, index) => (
+           <div key={index} className="question-item">
+             {/* Question Header - Always visible */}
+             <div 
+               className="question-header"
+               onClick={() => toggleExpand(index)}
+             >
+               <span className="question-number">Q{index + 1}</span>
+               <h3 className="question-text">{question.question}</h3>
+               <span className="dropdown-icon">
+                 {expandedItems[index] ? '▲' : '▼'}
+               </span>
+             </div>
+     
+             {/* Collapsible Content - Vertical Stack */}
+             {feedbackData[index] && expandedItems[index] && (
+               <div className="collapsible-content">
+                 {/* Feedback Section */}
+                 <div className="feedback-section">
+                   <div className="section-header">
+                     <span className="feedback-icon">📝</span>
+                     <h4>Feedback</h4>
+                   </div>
+                   <div className="feedback-content">
+                     {feedbackData[index].concise_feedback}
+                   </div>
+                 </div>
+     
+                 {/* Suggested Answer Section */}
+                 <div className="suggestion-section">
+                   <div className="section-header">
+                     <span className="suggestion-icon">💡</span>
+                     <h4>Suggested Answer</h4>
+                   </div>
+                   <div className="suggestion-content">
+                     {feedbackData[index].suggested_answer}
+                   </div>
+                 </div>
+               </div>
+             )}
+           </div>
+         ))}
+       </div>
+     </div>
       )}
 
       <div className="action-buttons">
