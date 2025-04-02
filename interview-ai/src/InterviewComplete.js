@@ -11,31 +11,120 @@ Font.register({
     { src: 'https://fonts.gstatic.com/s/opensans/v17/mem5YaGs126MiZpBA-UNirkOUuhs.ttf', fontWeight: 600 }
   ]
 });
-
-// PDF Styles
 const styles = StyleSheet.create({
-  page: { padding: 30, fontFamily: 'Open Sans' },
-  header: { marginBottom: 20, textAlign: 'center' },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 5, color: '#2c3e50' },
-  subtitle: { fontSize: 14, color: '#7f8c8d' },
-  section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10, color: '#2c3e50', textAlign: 'center' },
-  scoreCards: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  scoreCard: { width: '30%', padding: 15, borderRadius: 8, backgroundColor: '#ffffff', textAlign: 'center' },
-  scoreValue: { fontSize: 24, fontWeight: 'bold', color: '#3498db', marginBottom: 5 },
-  scoreLabel: { fontSize: 12, color: '#7f8c8d', marginBottom: 10 },
-  progressBar: { height: 10, backgroundColor: '#ecf0f1', borderRadius: 5, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#3498db' },
-  feedbackCards: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  feedbackCard: { width: '48%', padding: 15, borderRadius: 8, backgroundColor: '#ffffff' },
-  feedbackTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#2c3e50', textAlign: 'center' },
-  listItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, padding: 8, borderRadius: 4 },
-  strengthItem: { backgroundColor: 'rgba(46, 204, 113, 0.1)' },
-  improvementItem: { backgroundColor: 'rgba(231, 76, 60, 0.1)' },
-  icon: { width: 20, height: 20, borderRadius: 10, marginRight: 8, textAlign: 'center' },
-  strengthIcon: { backgroundColor: '#2ecc71', color: 'white' },
-  improvementIcon: { backgroundColor: '#e74c3c', color: 'white' },
-  // Improved question item styling
+  page: { 
+    padding: 30, 
+    fontFamily: 'Open Sans',
+    position: 'relative' 
+  },
+  header: { 
+    marginBottom: 20, 
+    textAlign: 'center' 
+  },
+  title: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    marginBottom: 5, 
+    color: '#2c3e50' 
+  },
+  subtitle: { 
+    fontSize: 14, 
+    color: '#7f8c8d' 
+  },
+  section: { 
+    marginBottom: 20 
+  },
+  sectionTitle: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    marginBottom: 10, 
+    color: '#2c3e50', 
+    textAlign: 'center' 
+  },
+  scoreCards: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginBottom: 20 
+  },
+  scoreCard: { 
+    width: '30%', 
+    padding: 15, 
+    borderRadius: 8, 
+    backgroundColor: '#ffffff', 
+    textAlign: 'center',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)' 
+  },
+  scoreValue: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    color: '#3498db', 
+    marginBottom: 5 
+  },
+  scoreLabel: { 
+    fontSize: 12, 
+    color: '#7f8c8d', 
+    marginBottom: 10 
+  },
+  progressBar: { 
+    height: 10, 
+    backgroundColor: '#ecf0f1', 
+    borderRadius: 5, 
+    overflow: 'hidden' 
+  },
+  progressFill: { 
+    height: '100%', 
+    backgroundColor: '#3498db' 
+  },
+  feedbackCards: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginBottom: 20 
+  },
+  feedbackCard: { 
+    width: '48%', 
+    padding: 15, 
+    borderRadius: 8, 
+    backgroundColor: '#ffffff',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+  },
+  feedbackTitle: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    marginBottom: 10, 
+    color: '#2c3e50', 
+    textAlign: 'center' 
+  },
+  listItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 8, 
+    padding: 8, 
+    borderRadius: 4 
+  },
+  strengthItem: { 
+    backgroundColor: 'rgba(46, 204, 113, 0.1)' 
+  },
+  improvementItem: { 
+    backgroundColor: 'rgba(231, 76, 60, 0.1)' 
+  },
+  icon: { 
+    width: 20, 
+    height: 20, 
+    borderRadius: 10, 
+    marginRight: 8, 
+    textAlign: 'center',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  strengthIcon: { 
+    backgroundColor: '#2ecc71', 
+    color: 'white' 
+  },
+  improvementIcon: { 
+    backgroundColor: '#e74c3c', 
+    color: 'white' 
+  },
   questionItem: {
     marginBottom: 20,
     padding: 15,
@@ -44,8 +133,9 @@ const styles = StyleSheet.create({
     breakInside: 'avoid',
     pageBreakInside: 'avoid'
   },
-
-  // Better feedback section
+  questionHeader: {
+    marginBottom: 10
+  },
   feedbackSection: {
     marginTop: 15,
     padding: 12,
@@ -53,8 +143,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderLeft: '3px solid #3498db'
   },
-
-  // Improved suggested answer section
   suggestionSection: {
     marginTop: 15,
     padding: 12,
@@ -62,31 +150,48 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderLeft: '3px solid #2ecc71'
   },
-
-  // Section headers
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8
   },
-
-  // Better spacing for content
   contentText: {
     fontSize: 12,
     lineHeight: 1.5,
-    marginBottom: 8
+    marginBottom: 8,
+    whiteSpace: 'pre-wrap'
   },
-
-  // Add more vertical space between questions
   questionsContainer: {
     marginTop: 15
   },
-  feedbackContent: { marginTop: 10, padding: 10, backgroundColor: '#f8f9fa', borderRadius: 4 },
-  pageNumber: { position: 'absolute', bottom: 20, right: 30, fontSize: 10, color: '#7f8c8d' }
+  pageNumber: { 
+    position: 'absolute', 
+    bottom: 20, 
+    right: 30, 
+    fontSize: 10, 
+    color: '#7f8c8d' 
+  },
+  questionPage: {
+    padding: 30,
+    fontFamily: 'Open Sans',
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'flex-start'
+  },
+  questionContent: {
+    flexGrow: 1,
+    marginTop: 20
+  }
 });
 
-// PDF Document Component
-const InterviewReport = ({ interviewData, feedbackData, avgTechnical, avgCommunication, avgOverall, topStrengths, topImprovements }) => (
+const InterviewReport = ({ interviewData, feedbackData, avgTechnical, avgCommunication, avgOverall, topStrengths, topImprovements }) => {
+  // Function to determine if a question has content to display
+  const hasContent = (feedback) => {
+    return feedback?.concise_feedback || feedback?.suggested_answer;
+};
+
+return (
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
@@ -99,7 +204,6 @@ const InterviewReport = ({ interviewData, feedbackData, avgTechnical, avgCommuni
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Performance Summary</Text>
         <View style={styles.scoreCards}>
-          {/* Overall Score */}
           <View style={styles.scoreCard}>
             <Text style={styles.scoreValue}>{avgOverall}</Text>
             <Text style={styles.scoreLabel}>Overall Score</Text>
@@ -108,7 +212,6 @@ const InterviewReport = ({ interviewData, feedbackData, avgTechnical, avgCommuni
             </View>
           </View>
 
-          {/* Technical Score */}
           <View style={styles.scoreCard}>
             <Text style={styles.scoreValue}>{avgTechnical}/5</Text>
             <Text style={styles.scoreLabel}>Technical Skills</Text>
@@ -117,7 +220,6 @@ const InterviewReport = ({ interviewData, feedbackData, avgTechnical, avgCommuni
             </View>
           </View>
 
-          {/* Communication Score */}
           <View style={styles.scoreCard}>
             <Text style={styles.scoreValue}>{avgCommunication}/5</Text>
             <Text style={styles.scoreLabel}>Communication</Text>
@@ -130,7 +232,6 @@ const InterviewReport = ({ interviewData, feedbackData, avgTechnical, avgCommuni
 
       <View style={styles.section}>
         <View style={styles.feedbackCards}>
-          {/* Strengths */}
           <View style={[styles.feedbackCard, { borderTop: '4px solid #2ecc71' }]}>
             <Text style={styles.feedbackTitle}>Your Key Strengths</Text>
             {topStrengths.length > 0 ? (
@@ -147,7 +248,6 @@ const InterviewReport = ({ interviewData, feedbackData, avgTechnical, avgCommuni
             )}
           </View>
 
-          {/* Improvements */}
           <View style={[styles.feedbackCard, { borderTop: '4px solid #e74c3c' }]}>
             <Text style={styles.feedbackTitle}>Areas for Improvement</Text>
             {topImprovements.length > 0 ? (
@@ -166,59 +266,84 @@ const InterviewReport = ({ interviewData, feedbackData, avgTechnical, avgCommuni
         </View>
       </View>
 
-      {interviewData?.questions && (
-        // Updated PDF Question Review Section
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Question Review</Text>
-          <View style={styles.questionsContainer}>
-            {interviewData.questions.map((question, index) => (
-              <View key={index} style={styles.questionItem} wrap={false}>
-                <View style={styles.questionHeader}>
-                  <View style={styles.questionNumber}>
-                    <Text>Q{index + 1}</Text>
+      </Page>
+      {interviewData?.questions?.reduce((pages, question, index) => {
+        const feedback = feedbackData?.[index] || {};
+        
+        // If no content, add to current page or create new page if none exists
+        if (!hasContent(feedback)) {
+          if (pages.length === 0 || pages[pages.length - 1].hasContent) {
+            // Create new page for questions without content
+            pages.push({
+              questions: [question],
+              feedbacks: [feedback],
+              hasContent: false
+            });
+          } else {
+            // Add to existing page for questions without content
+            pages[pages.length - 1].questions.push(question);
+            pages[pages.length - 1].feedbacks.push(feedback);
+          }
+        } else {
+          // Always create new page for questions with content
+          pages.push({
+            questions: [question],
+            feedbacks: [feedback],
+            hasContent: true
+          });
+        }
+        
+        return pages;
+      }, []).map((page, pageIndex) => (
+        <Page key={`page-${pageIndex}`} size="A4" style={styles.page}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              {page.hasContent ? `Question ${pageIndex + 1}` : "Additional Questions"}
+            </Text>
+            
+            {page.questions.map((question, qIndex) => {
+              const feedback = page.feedbacks[qIndex];
+              return (
+                <View key={`q-${pageIndex}-${qIndex}`} style={styles.questionItem}>
+                  <View style={styles.questionHeader}>
+                    <Text style={{ fontWeight: 'bold', marginBottom: 10 }}>
+                      Q{interviewData.questions.indexOf(question) + 1}: {question.question}
+                    </Text>
                   </View>
-                  <Text style={styles.questionText}>{question.question}</Text>
-                </View>
 
-                {feedbackData[index] && (
-                  <>
+                  {feedback?.concise_feedback && (
                     <View style={styles.feedbackSection}>
                       <View style={styles.sectionHeader}>
                         <Text style={{ fontWeight: 'bold' }}>Feedback:</Text>
                       </View>
                       <Text style={styles.contentText}>
-                        {feedbackData[index].concise_feedback}
+                        {feedback.concise_feedback}
                       </Text>
                     </View>
+                  )}
 
+                  {feedback?.suggested_answer && (
                     <View style={styles.suggestionSection}>
                       <View style={styles.sectionHeader}>
                         <Text style={{ fontWeight: 'bold' }}>Suggested Answer:</Text>
                       </View>
                       <Text style={styles.contentText}>
-                        {feedbackData[index].suggested_answer.split('\n').map((paragraph, i) => (
-                          <Text key={i}>
-                            {paragraph}
-                            {'\n\n'}
-                          </Text>
-                        ))}
+                        {feedback.suggested_answer}
                       </Text>
                     </View>
-                  </>
-                )}
-              </View>
-            ))}
+                  )}
+                </View>
+              );
+            })}
           </View>
-        </View>
-      )}
-
-      <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => (
-        `${pageNumber} / ${totalPages}`
-      )} fixed />
-    </Page>
-  </Document>
-);
-
+          <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => (
+            `${pageNumber} / ${totalPages}`
+          )} fixed />
+        </Page>
+      ))}
+    </Document>
+  );
+};
 const InterviewComplete = () => {
   const location = useLocation();
   const navigate = useNavigate();

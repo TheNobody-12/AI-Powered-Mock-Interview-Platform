@@ -35,6 +35,7 @@ import mediapipe as mp
 from scipy.spatial import distance
 import queue
 import logging 
+import socket
 
 
 load_dotenv()
@@ -274,7 +275,7 @@ if os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
 
 # Initialize Gemini
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-gemini_model = genai.GenerativeModel("gemini-1.5-pro")
+gemini_model = genai.GenerativeModel("learnlm-1.5-pro-experimental")
 
 # Initialize Kafka
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
@@ -305,23 +306,111 @@ def is_valid_url(url):
         return all([result.scheme, result.netloc])
     except ValueError:
         return False
+def scrape_company_info(url, timeout=20, max_retries=2):
+    """
+    Scrape company information from a website with:
+    - Better timeout handling
+    - Retry mechanism
+    - Improved content extraction
+    - Comprehensive error handling
+    """
+    def is_valid_url(url):
+        try:
+            result = urlparse(url)
+            return all([result.scheme, result.netloc])
+        except:
+            return False
 
-def scrape_company_info(url):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+    }
+
+    # Validate and normalize URL
+    if not is_valid_url(url):
+        return "Invalid URL format"
+    
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+
+    # Session with retry strategy
+    session = requests.Session()
+    retry_adapter = requests.adapters.HTTPAdapter(
+        max_retries=max_retries,
+        pool_connections=1,
+        pool_maxsize=1
+    )
+    session.mount('https://', retry_adapter)
+    session.mount('http://', retry_adapter)
+
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=10)
+        # Set socket timeout
+        socket.setdefaulttimeout(timeout)
+        
+        response = session.get(
+            url,
+            headers=headers,
+            timeout=(timeout, timeout),  # Connect and read timeout
+            verify=True,
+            allow_redirects=True
+        )
+        response.raise_for_status()
+
+        # Check content type
+        content_type = response.headers.get('Content-Type', '')
+        if 'text/html' not in content_type:
+            return f"Non-HTML content detected: {content_type}"
+
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         # Remove unwanted elements
-        for element in soup(['script', 'style', 'nav', 'footer']):
-            element.decompose()
+        unwanted = ['script', 'style', 'nav', 'footer', 'iframe', 'noscript',
+                  'svg', 'img', 'button', 'form', 'input', 'select',
+                  'header', 'aside', 'meta', 'link']
+        for tag in unwanted:
+            for element in soup.find_all(tag):
+                element.decompose()
+
+        # Try to find main content first
+        main_content = None
+        content_selectors = [
+            'main', 'article', 'div[role="main"]',
+            '#content', '#main', '.main-content',
+            'body'  # Fallback
+        ]
         
-        # Get text from main content areas
-        text = ' '.join([p.get_text() for p in soup.find_all(['p', 'h1', 'h2', 'h3'])])
-        return text[:5000]  # Limit to first 5000 chars
+        for selector in content_selectors:
+            main_content = soup.select_one(selector)
+            if main_content:
+                break
+
+        if main_content:
+            text = main_content.get_text(separator=' ', strip=True)
+        else:
+            text = soup.get_text(separator=' ', strip=True)
+
+        # Clean text
+        text = ' '.join(text.split())
+        return text[:15000]  # Return first 15,000 characters
+
+    except requests.exceptions.Timeout:
+        print(f"Timeout occurred while accessing {url}")
+        return "Request timeout - server took too long to respond"
+    except requests.exceptions.SSLError:
+        print(f"SSL error occurred with {url}")
+        return "SSL verification failed"
+    except requests.exceptions.TooManyRedirects:
+        print(f"Too many redirects for {url}")
+        return "Excessive redirects detected"
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed for {url}: {str(e)}")
+        return f"Request error: {str(e)}"
     except Exception as e:
-        print(f"Error scraping company page: {e}")
-        return ""
+        print(f"Unexpected error processing {url}: {str(e)}")
+        return "Processing error occurred"
+    finally:
+        session.close()
 
 def process_pdf(file_path):
     reader = PdfReader(file_path)
@@ -687,13 +776,17 @@ def analyze_response():
 
         # Gemini API prompt
         prompt = f"""
-        Analyze this interview question and response:
 
-        QUESTION: {question}
-        RESPONSE: {response}
+        You are an expert interview coach analyzing a mock interview. Follow these steps:
 
-        First rewrite the response to make it grammatically correct and complete. Then, 
-        provide actionable feedback on the candidate's performance based on the following criteria:
+        1. FIRST, correct this transcribed response:
+        - Fix grammar/syntax errors while preserving meaning
+        - Complete fragmented sentences
+        - Mark unclear parts with [?]
+        - Keep technical terms intact
+
+        RAW RESPONSE: {response}
+        2. THEN, provide feedback on the candidate's performance based on the following criteria against the question {question}:
         - Technical knowledge and skills
         - Communication skills
         - Overall impression
