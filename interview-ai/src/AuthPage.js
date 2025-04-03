@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import LoginForm from './LoginForm';
 import SignupForm from './SignupForm';
-import { useAuth } from './contexts/AuthContext';
+import { useAuth } from './AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 import './AuthPage.css';

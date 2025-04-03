@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import "./InterviewForm.css";
@@ -6,8 +6,11 @@ import "./InterviewForm.css";
 function InterviewForm({ setInterviewData }) {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
+  const formRef = useRef(null);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [fileError, setFileError] = useState("");
+  const [isFormValid, setIsFormValid] = useState(false);
 
   const [formData, setFormData] = useState({
     jobRole: "",
@@ -19,26 +22,73 @@ function InterviewForm({ setInterviewData }) {
     resume: null
   });
 
-  const [error, setError] = useState("");
+  const [errors, setErrors] = useState({
+    jobRole: "",
+    jobDescription: "",
+    resume: ""
+  });
+
+  // Validate form whenever formData changes
+  useEffect(() => {
+    const isValid = (
+      formData.jobRole.trim() &&
+      formData.jobDescription.trim() &&
+      formData.resume
+    );
+    setIsFormValid(isValid);
+  }, [formData]);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: "" }));
+    }
   };
 
   const handleFileChange = (e) => {
-    setFormData({ ...formData, resume: e.target.files[0] });
+    const file = e.target.files[0];
+    setFileError("");
+    
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+    if (!validTypes.includes(file.type)) {
+      setFileError("Please upload a PDF or Word document");
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      setFileError("File size should be less than 5MB");
+      return;
+    }
+
+    setFormData(prev => ({ ...prev, resume: file }));
+    setErrors(prev => ({ ...prev, resume: "" }));
+  };
+
+  const validateForm = () => {
+    const newErrors = {
+      jobRole: !formData.jobRole.trim() ? "Job role is required" : "",
+      jobDescription: !formData.jobDescription.trim() ? "Job description is required" : "",
+      resume: !formData.resume ? "Resume is required" : ""
+    };
+    
+    setErrors(newErrors);
+    return !Object.values(newErrors).some(error => error);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+    
+    if (!validateForm()) return;
+    
     setIsLoading(true);
-
-    if (!formData.jobRole || !formData.jobDescription || !formData.resume) {
-      setError("Job role, description, and resume are required");
-      setIsLoading(false);
-      return;
-    }
+    setProgress(0);
 
     try {
       const data = new FormData();
@@ -50,8 +100,12 @@ function InterviewForm({ setInterviewData }) {
       data.append('questionType', formData.questionType);
       data.append('experienceLevel', formData.experienceLevel);
 
+      // Simulate progress for better UX
       const progressInterval = setInterval(() => {
-        setProgress(prev => Math.min(prev + 10, 90));
+        setProgress(prev => {
+          const newProgress = prev + Math.random() * 10;
+          return newProgress > 90 ? 90 : newProgress;
+        });
       }, 500);
 
       const response = await axios.post(
@@ -70,21 +124,29 @@ function InterviewForm({ setInterviewData }) {
         }
       );
 
-      // No need to parse JSON here since backend now returns proper JSON
-    setInterviewData({
-      ...formData,
-      questions: response.data.questions, // Directly use the array
-      resumeInsights: response.data.resume_insights,
-      currentQuestionIndex: 0,
-      answers: [],
-      feedback: null
-    });
+      clearInterval(progressInterval);
+      setProgress(100);
+
+      // Small delay to show 100% completion
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      setInterviewData({
+        ...formData,
+        questions: response.data.questions,
+        resumeInsights: response.data.resume_insights,
+        currentQuestionIndex: 0,
+        answers: [],
+        feedback: null
+      });
 
       navigate("/interview");
     } catch (err) {
       console.error("Error generating questions:", err);
-      setError(err.response?.data?.error ||
-        "Failed to generate questions. Please try again.");
+      const errorMessage = err.response?.data?.error ||
+        err.message ||
+        "Failed to generate questions. Please try again.";
+      
+      setErrors(prev => ({ ...prev, general: errorMessage }));
     } finally {
       setIsLoading(false);
       setProgress(0);
@@ -101,26 +163,40 @@ function InterviewForm({ setInterviewData }) {
           </p>
         </div>
 
-        {error && <div className="error-message">{error}</div>}
+        {errors.general && (
+          <div className="error-message">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {errors.general}
+          </div>
+        )}
 
-        <form onSubmit={handleSubmit} className="interview-form">
+        <form ref={formRef} onSubmit={handleSubmit} className="interview-form">
           <div className="row">
-            <div className="col-md-6 mb-3">
-              <label htmlFor="jobRole" className="form-label">Target Job Role *</label>
+            <div className="form-group">
+              <label htmlFor="jobRole">Target Job Role *</label>
               <input
                 type="text"
                 id="jobRole"
                 name="jobRole"
                 value={formData.jobRole}
                 onChange={handleChange}
-                className="form-control"
+                className={`form-control ${errors.jobRole ? 'error' : ''}`}
                 placeholder="e.g. Software Engineer, Data Scientist"
-                required
               />
+              {errors.jobRole && (
+                <div className="error-message">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {errors.jobRole}
+                </div>
+              )}
             </div>
 
-            <div className="col-md-6 mb-3">
-              <label htmlFor="company" className="form-label">Company Name</label>
+            <div className="form-group">
+              <label htmlFor="company">Company Name</label>
               <input
                 type="text"
                 id="company"
@@ -133,23 +209,30 @@ function InterviewForm({ setInterviewData }) {
             </div>
           </div>
 
-          <div className="mb-3">
-            <label htmlFor="jobDescription" className="form-label">Job Description *</label>
+          <div className="form-group">
+            <label htmlFor="jobDescription">Job Description *</label>
             <textarea
               id="jobDescription"
               name="jobDescription"
               value={formData.jobDescription}
               onChange={handleChange}
-              className="form-control"
+              className={`form-control ${errors.jobDescription ? 'error' : ''}`}
               rows="5"
               placeholder="Paste the job description or key requirements..."
-              required
             ></textarea>
+            {errors.jobDescription && (
+              <div className="error-message">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {errors.jobDescription}
+              </div>
+            )}
           </div>
 
           <div className="row">
-            <div className="col-md-6 mb-3">
-              <label htmlFor="companyWebsite" className="form-label">Company Website</label>
+            <div className="form-group">
+              <label htmlFor="companyWebsite">Company Website</label>
               <input
                 type="url"
                 id="companyWebsite"
@@ -159,11 +242,11 @@ function InterviewForm({ setInterviewData }) {
                 className="form-control"
                 placeholder="https://company.com/careers"
               />
-              <small className="text-muted">We'll analyze the company culture and values</small>
+              <small className="form-hint">We'll analyze the company culture and values</small>
             </div>
 
-            <div className="col-md-6 mb-3">
-              <label htmlFor="experienceLevel" className="form-label">Experience Level</label>
+            <div className="form-group">
+              <label htmlFor="experienceLevel">Experience Level</label>
               <select
                 id="experienceLevel"
                 name="experienceLevel"
@@ -179,8 +262,8 @@ function InterviewForm({ setInterviewData }) {
           </div>
 
           <div className="row">
-            <div className="col-md-6 mb-3">
-              <label htmlFor="questionType" className="form-label">Question Type</label>
+            <div className="form-group">
+              <label htmlFor="questionType">Question Type</label>
               <select
                 id="questionType"
                 name="questionType"
@@ -194,33 +277,49 @@ function InterviewForm({ setInterviewData }) {
               </select>
             </div>
 
-            <div className="mb-3">
-              <label htmlFor="resume" className="form-label">Upload Resume (PDF)*</label>
-              <input
-                type="file"
-                id="resume"
-                name="resume"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="form-control"
-                accept=".pdf"
-                required
-              />
-              <small className="text-muted">PDF or Word document (We'll extract relevant skills)</small>
+            <div className="form-group">
+              <label htmlFor="resume">Upload Resume (PDF or Word)*</label>
+              <div className="file-input-container">
+                <input
+                  type="file"
+                  id="resume"
+                  name="resume"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className={`form-control ${errors.resume || fileError ? 'error' : ''}`}
+                  accept=".pdf,.doc,.docx"
+                />
+                {formData.resume && (
+                  <div className="file-selected">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {formData.resume.name}
+                  </div>
+                )}
+              </div>
+              {(errors.resume || fileError) && (
+                <div className="error-message">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {errors.resume || fileError}
+                </div>
+              )}
+              <small className="form-hint">PDF or Word document (max 5MB)</small>
             </div>
           </div>
-
 
           <div className="form-footer">
             <button
               type="submit"
               className="submit-button"
-              disabled={isLoading}
+              disabled={isLoading || !isFormValid}
             >
               {isLoading ? (
                 <>
                   <span className="spinner"></span>
-                  Generating Questions ({progress}%)
+                  Generating Questions ({Math.round(progress)}%)
                 </>
               ) : (
                 <>

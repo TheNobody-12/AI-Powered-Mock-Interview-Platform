@@ -213,31 +213,24 @@ def process_audio(audio_bytes):
     try:
         mono_audio = convert_audio(audio_bytes)
         
-        # Send larger chunks (3 seconds instead of 2)
-        producer.send('audio_stream', {
-            'audio': base64.b64encode(mono_audio).decode('utf-8'),
-            'chunk_size': len(mono_audio)
-        })
-        
         client = speech.SpeechClient()
         audio = speech.RecognitionAudio(content=mono_audio)
         
-        # Enhanced recognition config
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=16000,
             language_code="en-US",
             enable_automatic_punctuation=True,
-            model="latest_long",  # Use latest long-form model
-            use_enhanced=True,    # Use enhanced model
+            model="latest_long",
+            use_enhanced=True,
             audio_channel_count=1,
             enable_word_confidence=True,
             enable_word_time_offsets=True
         )
         
-        # Use streaming recognition for better results
+        # Increase timeout for larger chunks
         operation = client.long_running_recognize(config=config, audio=audio)
-        response = operation.result(timeout=10)
+        response = operation.result(timeout=15)  # Increased from 10 to 15 seconds
         
         if response.results:
             transcript_piece = " ".join([result.alternatives[0].transcript 
@@ -246,7 +239,7 @@ def process_audio(audio_bytes):
             producer.send('interview_updates', {
                 'transcript': transcript_piece,
                 'positivity_score': latest_positivity_score,
-                'is_final': True  # Indicate this is a finalized transcript
+                'is_final': True
             })
             
     except Exception as e:
@@ -255,8 +248,9 @@ def process_audio(audio_bytes):
             'type': 'audio_processing'
         })
 
+
 def preprocess_audio(audio_bytes):
-    """Additional audio preprocessing"""
+    """Improved audio preprocessing without equalize"""
     audio = AudioSegment.from_wav(io.BytesIO(audio_bytes))
     
     # Normalize volume
@@ -265,14 +259,8 @@ def preprocess_audio(audio_bytes):
     # Apply noise reduction
     audio = audio.low_pass_filter(8000).high_pass_filter(80)
     
-    # Boost speech frequencies
-    audio = audio.equalize(
-        AudioSegment.Equalizer().frequencies(
-            (300, 2),  # Boost 300Hz range
-            (1000, 3),  # Boost 1kHz range
-            (3000, 3)   # Boost 3kHz range
-        )
-    )
+    # Simple volume boost instead of equalization
+    audio = audio + 3  # Boost volume by 3dB
     
     buffer = io.BytesIO()
     audio.export(buffer, format="wav")
@@ -383,11 +371,9 @@ def handle_audio():
     
     try:
         audio_bytes = request.files['audio'].read()
-        
-        # Add preprocessing
         processed_audio = preprocess_audio(audio_bytes)
         
-        # Process in background with error handling
+        # Process in background with increased timeout
         threading.Thread(
             target=process_audio,
             args=(processed_audio,),
@@ -396,20 +382,22 @@ def handle_audio():
         
         return jsonify({
             "status": "processing",
-            "chunk_size": len(processed_audio)
+            "chunk_size": len(processed_audio),
+            "chunk_duration": 5.0  # Indicate the expected duration in seconds
         })
     except Exception as e:
         return jsonify({
             "error": "Audio processing failed",
             "details": str(e)
         }), 500
-
+    
 @app.route('/send_video', methods=['POST'])
 def handle_video():
     if 'video' not in request.files:
         return jsonify({"error": "No video file"}), 400
     threading.Thread(target=process_video, args=(request.files['video'].read(),)).start()
     return jsonify({"status": "processing"})
+
 @app.route('/analyze_response', methods=['POST'])
 def analyze_response():
     """Process the candidate's response and generate feedback."""
@@ -431,6 +419,12 @@ def analyze_response():
 
         QUESTION: {question}
         RESPONSE: {response}
+
+        First rewrite the response to make it grammatically correct and complete. Then, 
+        provide actionable feedback on the candidate's performance based on the following criteria:
+        - Technical knowledge and skills
+        - Communication skills
+        - Overall impression
 
         Provide feedback in this exact JSON format:
         {{

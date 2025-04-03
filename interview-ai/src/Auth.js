@@ -1,45 +1,32 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom"; // Ensure react-router-dom is installed
+// Auth.js
+import React, { useState, useContext } from "react";
+import { useNavigate } from "react-router-dom";
+import { AuthContext } from "./AuthContext"; // We'll create this next
 
 const Auth = () => {
-  // Toggle between login (true) and register (false)
+  const { login } = useContext(AuthContext);
   const [isLogin, setIsLogin] = useState(true);
-
-  // Form state: for registration, we use "name" in addition to email and password
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: ""
-  });
+  const [formData, setFormData] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState(null);
-
-  // For redirection after successful login
   const navigate = useNavigate();
 
-  // Update form state on input change
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Toggle between login and registration modes
   const toggleMode = () => {
     setIsLogin(!isLogin);
     setError(null);
   };
 
-  // Handle form submission for both login and registration
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Choose the endpoint based on mode
     const endpoint = isLogin ? "/api/login" : "/api/register";
 
     try {
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)
       });
       const data = await response.json();
@@ -49,13 +36,10 @@ const Auth = () => {
       }
 
       if (isLogin) {
-        // Save the JWT token and redirect to dashboard
-        localStorage.setItem("token", data.token);
+        login(data.token, data.user_id, data.name);
         navigate("/dashboard");
       } else {
-        // Registration was successful; optionally, automatically log in or notify the user.
         alert("Registration successful! Please log in.");
-        // Reset form and toggle to login mode.
         setFormData({ name: "", email: "", password: "" });
         setIsLogin(true);
       }

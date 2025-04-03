@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider } from './AuthContext';
 import Navbar from "./Navbar";
 import InterviewForm from "./InterviewForm";
 import LiveInterview from "./LiveInterview";
 import LandingPage from "./LandingPage";
+import Dashboard from "./Dashboard";
 import AuthPage from "./AuthPage";
 import InterviewComplete from "./InterviewComplete";
-import Auth from "./Auth";
 
 function App() {
   const [interviewData, setInterviewData] = useState(null);
@@ -19,6 +19,7 @@ function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/interview-question" element={<InterviewForm setInterviewData={setInterviewData} />} />
         <Route path="/interview" element={<LiveInterview interviewData={interviewData} />} />
         <Route path="/interview-complete" element={<InterviewComplete />} />

@@ -22,21 +22,248 @@ from datetime import datetime
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 import requests
-from face_analysis import FaceAnalyzer
-import numpy as np
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+import jwt
+import datetime
+from functools import wraps
 import cv2
+from PIL import Image
+import numpy as np
+from deepface import DeepFace
+import mediapipe as mp
+from scipy.spatial import distance
+import queue
+import logging 
+import socket
 
 
 load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL", "sqlite:///site.db")
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://localhost:3000"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["X-Custom-Header"],
+        "supports_credentials": True,  # If using cookies/auth
+        "max_age": 86400  # Cache preflight for 24 hours
+    },
+    r"/generate_questions": {
+        "origins": ["http://localhost:3000"],  # Your React app's origin
+        "methods": ["POST", "OPTIONS"],  # Allowed methods
+        "allow_headers": ["Content-Type"]
+    },
+    r"/*": {  # Apply to all routes
+        "origins": ["http://localhost:3000"],  # Your React app
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
+
+
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")  # Changed to threading mode
 
-# Initialize the analyzer
-face_analyzer = FaceAnalyzer()
+# Initialize Face Analysis components
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5,
+    static_image_mode=False
+)
 
+
+# Emotion weights for engagement score calculation
+emotion_weights = {
+    "happy": 1.0, "surprise": 0.8, "neutral": 0.5,
+    "angry": 0.2, "sad": 0.1, "fear": 0.3, "disgust": 0.2
+}
+
+# Landmark indices
+LEFT_EYE = [33, 160, 158, 133, 153, 144]
+RIGHT_EYE = [362, 385, 387, 263, 373, 380]
+NOSE_TIP = 1
+CHIN = 199
+LEFT_EAR = 234
+RIGHT_EAR = 454
+
+# Frame processing queue
+frame_queue = queue.Queue(maxsize=10)
+result_queue = queue.Queue()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+handler.setLevel(logging.INFO)
+
+class FaceAnalyzer:
+    def __init__(self):
+        self.prev_face_center = None
+        self.blink_counter = 0
+        self.start_time = time.time()
+        self.engagement_history = []
+        self.last_emotion = "neutral"
+        self.frame_count = 0
+        self.skip_frames = 2  # Process every 3rd frame
+
+    def eye_aspect_ratio(self, landmarks, eye_points):
+        A = distance.euclidean(landmarks[eye_points[1]], landmarks[eye_points[5]])
+        B = distance.euclidean(landmarks[eye_points[2]], landmarks[eye_points[4]])
+        C = distance.euclidean(landmarks[eye_points[0]], landmarks[eye_points[3]])
+        return (A + B) / (2.0 * C)
+
+    def calculate_head_tilt(self, landmarks):
+        nose = landmarks[NOSE_TIP]
+        chin = landmarks[CHIN]
+        left_ear = landmarks[LEFT_EAR]
+        right_ear = landmarks[RIGHT_EAR]
+        vertical_angle = abs(nose[1] - chin[1]) / abs(left_ear[0] - right_ear[0] + 1e-6)
+        return -0.5 if vertical_angle < 0.8 else 0.0
+
+    def calculate_engagement(self, emotion, blinks_per_sec, head_movement, head_tilt_score):
+        emotion_score = emotion_weights.get(emotion, 0)
+        blink_score = min(blinks_per_sec / 5, 1.0)
+        movement_score = max(1.0 - min(head_movement / 50, 1.0), 0.1)
+        final_score = (0.5 * emotion_score) + (0.2 * blink_score) + (0.3 * movement_score) + (0.2 * head_tilt_score)
+        return max(0.0, min(final_score, 1.0))
+
+    def process_frame(self, frame):
+        self.frame_count += 1
+        if self.frame_count % (self.skip_frames + 1) != 0:
+            return None
+        
+        try:
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = face_mesh.process(rgb_frame)
+            
+            dominant_emotion = self.last_emotion
+            head_movement = 0
+            head_tilt_score = 0
+            ear = 0.3  # Default
+            
+            if results.multi_face_landmarks:
+                for face_landmarks in results.multi_face_landmarks:
+                    landmarks = {i: (lm.x * frame.shape[1], lm.y * frame.shape[0]) 
+                               for i, lm in enumerate(face_landmarks.landmark)}
+                    
+                    leftEAR = self.eye_aspect_ratio(landmarks, LEFT_EYE)
+                    rightEAR = self.eye_aspect_ratio(landmarks, RIGHT_EYE)
+                    ear = (leftEAR + rightEAR) / 2.0
+                    
+                    if ear < 0.25:
+                        self.blink_counter += 1
+                    
+                    face_center = np.mean([landmarks[i] for i in range(468)], axis=0)
+                    if self.prev_face_center is not None:
+                        head_movement = np.linalg.norm(np.array(face_center) - np.array(self.prev_face_center))
+                    self.prev_face_center = face_center
+                    head_tilt_score = self.calculate_head_tilt(landmarks)
+            
+            elapsed_time = time.time() - self.start_time
+            blinks_per_sec = self.blink_counter / elapsed_time if elapsed_time > 0 else 0
+            
+            if elapsed_time > 10:
+                self.blink_counter = 0
+                self.start_time = time.time()
+            
+            if self.frame_count % 15 == 0:
+                try:
+                    result = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False)
+                    self.last_emotion = result[0]['dominant_emotion']
+                except Exception as e:
+                    logger.error(f"Emotion detection error: {str(e)}")
+                    self.last_emotion = "neutral"
+            
+            engagement_score = self.calculate_engagement(
+                self.last_emotion,
+                blinks_per_sec,
+                head_movement,
+                head_tilt_score
+            )
+            
+            self.engagement_history.append(engagement_score)
+            if len(self.engagement_history) > 5:
+                self.engagement_history.pop(0)
+            
+            return {
+                "status": "success",
+                "engagement_score": np.mean(self.engagement_history[-5:]) if self.engagement_history else 0,
+                "emotion": self.last_emotion,
+                "positivity_score": self.calculate_positivity(self.last_emotion, engagement_score)
+            }
+            
+        except Exception as e:
+            logger.error(f"Frame processing error: {str(e)}")
+            return {
+                "status": "error",
+                "error": str(e)
+            }
+
+    def calculate_positivity(self, emotion, engagement_score):
+        emotion_weights = {
+            "happy": 1.0, "surprise": 0.8, "neutral": 0.8,
+            "sad": 0.3, "angry": 0.1, "fear": 0.2, "disgust": -0.1
+        }
+        emotion_score = emotion_weights.get(emotion, 0.5)
+        return (0.6 * emotion_score) + (0.4 * engagement_score)
+
+# Initialize analyzer
+analyzer = FaceAnalyzer()
+
+# User Model
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100))
+    email = db.Column(db.String(100), unique=True)
+    password = db.Column(db.String(200))
+
+    def __repr__(self):
+        return f'<User {self.email}>'
+
+
+# Create tables
+with app.app_context():
+    db.create_all()
+
+# Auth Decorator
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({'message': 'Token is missing!'}), 401
+        try:
+            data = jwt.decode(token.split()[1], app.config['SECRET_KEY'], algorithms=["HS256"])
+            current_user = User.query.get(data['user_id'])
+        except:
+            return jsonify({'message': 'Token is invalid!'}), 401
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+def process_frames():
+    """Worker thread for processing frames"""
+    while True:
+        try:
+            frame = frame_queue.get(timeout=1)
+            if frame is None:
+                break
+                
+            result = analyzer.process_frame(frame)
+            if result:
+                result_queue.put(result)
+        except queue.Empty:
+            continue
+        except Exception as e:
+            logger.error(f"Processing thread error: {str(e)}")
 
 # Configure upload folder
 UPLOAD_FOLDER = tempfile.gettempdir()
@@ -48,7 +275,7 @@ if os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
 
 # Initialize Gemini
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-gemini_model = genai.GenerativeModel("gemini-1.5-pro")
+gemini_model = genai.GenerativeModel("learnlm-1.5-pro-experimental")
 
 # Initialize Kafka
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
@@ -79,23 +306,111 @@ def is_valid_url(url):
         return all([result.scheme, result.netloc])
     except ValueError:
         return False
+def scrape_company_info(url, timeout=20, max_retries=2):
+    """
+    Scrape company information from a website with:
+    - Better timeout handling
+    - Retry mechanism
+    - Improved content extraction
+    - Comprehensive error handling
+    """
+    def is_valid_url(url):
+        try:
+            result = urlparse(url)
+            return all([result.scheme, result.netloc])
+        except:
+            return False
 
-def scrape_company_info(url):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+    }
+
+    # Validate and normalize URL
+    if not is_valid_url(url):
+        return "Invalid URL format"
+    
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+
+    # Session with retry strategy
+    session = requests.Session()
+    retry_adapter = requests.adapters.HTTPAdapter(
+        max_retries=max_retries,
+        pool_connections=1,
+        pool_maxsize=1
+    )
+    session.mount('https://', retry_adapter)
+    session.mount('http://', retry_adapter)
+
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=10)
+        # Set socket timeout
+        socket.setdefaulttimeout(timeout)
+        
+        response = session.get(
+            url,
+            headers=headers,
+            timeout=(timeout, timeout),  # Connect and read timeout
+            verify=True,
+            allow_redirects=True
+        )
+        response.raise_for_status()
+
+        # Check content type
+        content_type = response.headers.get('Content-Type', '')
+        if 'text/html' not in content_type:
+            return f"Non-HTML content detected: {content_type}"
+
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         # Remove unwanted elements
-        for element in soup(['script', 'style', 'nav', 'footer']):
-            element.decompose()
+        unwanted = ['script', 'style', 'nav', 'footer', 'iframe', 'noscript',
+                  'svg', 'img', 'button', 'form', 'input', 'select',
+                  'header', 'aside', 'meta', 'link']
+        for tag in unwanted:
+            for element in soup.find_all(tag):
+                element.decompose()
+
+        # Try to find main content first
+        main_content = None
+        content_selectors = [
+            'main', 'article', 'div[role="main"]',
+            '#content', '#main', '.main-content',
+            'body'  # Fallback
+        ]
         
-        # Get text from main content areas
-        text = ' '.join([p.get_text() for p in soup.find_all(['p', 'h1', 'h2', 'h3'])])
-        return text[:5000]  # Limit to first 5000 chars
+        for selector in content_selectors:
+            main_content = soup.select_one(selector)
+            if main_content:
+                break
+
+        if main_content:
+            text = main_content.get_text(separator=' ', strip=True)
+        else:
+            text = soup.get_text(separator=' ', strip=True)
+
+        # Clean text
+        text = ' '.join(text.split())
+        return text[:15000]  # Return first 15,000 characters
+
+    except requests.exceptions.Timeout:
+        print(f"Timeout occurred while accessing {url}")
+        return "Request timeout - server took too long to respond"
+    except requests.exceptions.SSLError:
+        print(f"SSL error occurred with {url}")
+        return "SSL verification failed"
+    except requests.exceptions.TooManyRedirects:
+        print(f"Too many redirects for {url}")
+        return "Excessive redirects detected"
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed for {url}: {str(e)}")
+        return f"Request error: {str(e)}"
     except Exception as e:
-        print(f"Error scraping company page: {e}")
-        return ""
+        print(f"Unexpected error processing {url}: {str(e)}")
+        return "Processing error occurred"
+    finally:
+        session.close()
 
 def process_pdf(file_path):
     reader = PdfReader(file_path)
@@ -178,55 +493,8 @@ Return only **valid JSON** in the following format, with **exactly** 10 question
         print(f"Error in question generation: {e}")
         raise
 
-#  Modify the process_video function
-def process_video(image_bytes):
-    global latest_positivity_score
-    
-    try:
-        # Convert bytes to numpy array
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        if frame is None:
-            raise ValueError("Could not decode image")
-            
-        # Analyze the frame
-        analysis = face_analyzer.analyze_frame(frame)
-        
-        # Get smoothed scores
-        engagement_score, positivity_score = face_analyzer.get_smoothed_scores()
-        
-        # Update global variables
-        latest_positivity_score = positivity_score
-        
-        # Send updates via Kafka
-        producer.send('interview_updates', {
-            'engagement_score': engagement_score,
-            'positivity_score': positivity_score,
-            'emotion': analysis['emotion'],
-            'timestamp': datetime.now().isoformat()
-        })
-        
-        return True
-        
-    except Exception as e:
-        producer.send('interview_errors', {
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        })
-        return False
 
-# Add a new endpoint to get current engagement metrics
-@app.route('/get_engagement_metrics', methods=['GET'])
-def get_engagement_metrics():
-    engagement, positivity = face_analyzer.get_smoothed_scores()
-    return jsonify({
-        'engagement_score': engagement,
-        'positivity_score': positivity,
-        'timestamp': datetime.now().isoformat()
-    })
-
-# Modify the Kafka consumer to handle engagement updates
+# Kafka Consumer Function
 def kafka_consumer():
     consumer = KafkaConsumer(
         'interview_updates',
@@ -237,19 +505,9 @@ def kafka_consumer():
     for message in consumer:
         data = message.value
         if 'transcript' in data:
-            socketio.emit('update', {
-                'type': 'transcript',
-                'data': data['transcript']
-            })
-        elif 'engagement_score' in data:
-            socketio.emit('update', {
-                'type': 'metrics',
-                'data': {
-                    'engagement': data['engagement_score'],
-                    'positivity': data['positivity_score'],
-                    'emotion': data.get('emotion', 'neutral')
-                }
-            })
+            socketio.emit('update', {'transcript': data['transcript']})
+        elif 'positivity_score' in data:
+            socketio.emit('update', {'positivity_score': data['positivity_score']})
 
 # Start Kafka consumer in a separate thread
 kafka_thread = threading.Thread(target=kafka_consumer)
@@ -260,56 +518,97 @@ kafka_thread.start()
 def convert_audio(audio_bytes):
     audio = AudioSegment.from_wav(io.BytesIO(audio_bytes))
     if audio.channels > 1:
-        audio = audio.set_channels(1)
-    audio = audio.set_frame_rate(16000)
+        audio = audio.set_channels(1)  # Convert to mono
+    audio = audio.set_frame_rate(16000)  # Standard sample rate for speech recognition
+    audio = audio.set_sample_width(2)  # 16-bit samples
+    audio = audio.high_pass_filter(80)  # Remove low-frequency noise
+    audio = audio.low_pass_filter(8000)  # Remove high-frequency noise
     buffer = io.BytesIO()
-    audio.export(buffer, format="wav")
+    audio.export(buffer, format="wav", parameters=[
+        "-ac", "1",          # Mono channel
+        "-ar", "16000",      # Sample rate
+        "-acodec", "pcm_s16le"  # 16-bit PCM
+    ])
     return buffer.getvalue()
 
 def process_audio(audio_bytes):
     global latest_transcript, candidate_answer
     try:
         mono_audio = convert_audio(audio_bytes)
-        producer.send('audio_stream', {'audio': base64.b64encode(mono_audio).decode('utf-8')})
         
         client = speech.SpeechClient()
         audio = speech.RecognitionAudio(content=mono_audio)
+        
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=16000,
             language_code="en-US",
+            enable_automatic_punctuation=True,
+            model="latest_long",
+            use_enhanced=True,
+            audio_channel_count=1,
+            enable_word_confidence=True,
+            enable_word_time_offsets=True
         )
-        response = client.recognize(config=config, audio=audio)
+        
+        # Increase timeout for larger chunks
+        operation = client.long_running_recognize(config=config, audio=audio)
+        response = operation.result(timeout=15)  # Increased from 10 to 15 seconds
+        
         if response.results:
-            transcript_piece = response.results[0].alternatives[0].transcript
+            transcript_piece = " ".join([result.alternatives[0].transcript 
+                                      for result in response.results])
             candidate_answer += " " + transcript_piece
             producer.send('interview_updates', {
                 'transcript': transcript_piece,
-                'positivity_score': latest_positivity_score
+                'positivity_score': latest_positivity_score,
+                'is_final': True
             })
+            
+    except Exception as e:
+        producer.send('interview_errors', {
+            'error': str(e),
+            'type': 'audio_processing'
+        })
+
+
+def preprocess_audio(audio_bytes):
+    """Improved audio preprocessing without equalize"""
+    audio = AudioSegment.from_wav(io.BytesIO(audio_bytes))
+    
+    # Normalize volume
+    audio = audio.normalize()
+    
+    # Apply noise reduction
+    audio = audio.low_pass_filter(8000).high_pass_filter(80)
+    
+    # Simple volume boost instead of equalization
+    audio = audio + 3  # Boost volume by 3dB
+    
+    buffer = io.BytesIO()
+    audio.export(buffer, format="wav")
+    return buffer.getvalue()
+
+def process_video(image_bytes):
+    global latest_positivity_score
+    try:
+        producer.send('video_stream', {'image': base64.b64encode(image_bytes).decode('utf-8')})
+        
+        client = vision.ImageAnnotatorClient()
+        image = vision.Image(content=image_bytes)
+        response = client.face_detection(image=image)
+        if response.face_annotations:
+            face = response.face_annotations[0]
+            emotions = {
+                "joy": face.joy_likelihood,
+                "anger": face.anger_likelihood,
+                "sorrow": face.sorrow_likelihood,
+            }
+            positivity_score = (emotions["joy"] - emotions["anger"] - emotions["sorrow"]) / 4
+            latest_positivity_score = max(0, min(1, positivity_score))
+            producer.send('interview_updates', {'positivity_score': latest_positivity_score})
     except Exception as e:
         producer.send('interview_errors', {'error': str(e)})
-
-# def process_video(image_bytes):
-#     global latest_positivity_score
-#     try:
-#         producer.send('video_stream', {'image': base64.b64encode(image_bytes).decode('utf-8')})
-        
-#         client = vision.ImageAnnotatorClient()
-#         image = vision.Image(content=image_bytes)
-#         response = client.face_detection(image=image)
-#         if response.face_annotations:
-#             face = response.face_annotations[0]
-#             emotions = {
-#                 "joy": face.joy_likelihood,
-#                 "anger": face.anger_likelihood,
-#                 "sorrow": face.sorrow_likelihood,
-#             }
-#             positivity_score = (emotions["joy"] - emotions["anger"] - emotions["sorrow"]) / 4
-#             latest_positivity_score = max(0, min(1, positivity_score))
-#             producer.send('interview_updates', {'positivity_score': latest_positivity_score})
-#     except Exception as e:
-#         producer.send('interview_errors', {'error': str(e)})
 
 #  Routes
 @app.route('/generate_questions', methods=['POST'])
@@ -392,15 +691,74 @@ def generate_questions_endpoint():
 def handle_audio():
     if 'audio' not in request.files:
         return jsonify({"error": "No audio file"}), 400
-    threading.Thread(target=process_audio, args=(request.files['audio'].read(),)).start()
-    return jsonify({"status": "processing"})
+    
+    try:
+        audio_bytes = request.files['audio'].read()
+        processed_audio = preprocess_audio(audio_bytes)
+        
+        # Process in background with increased timeout
+        threading.Thread(
+            target=process_audio,
+            args=(processed_audio,),
+            daemon=True
+        ).start()
+        
+        return jsonify({
+            "status": "processing",
+            "chunk_size": len(processed_audio),
+            "chunk_duration": 5.0  # Indicate the expected duration in seconds
+        })
+    except Exception as e:
+        return jsonify({
+            "error": "Audio processing failed",
+            "details": str(e)
+        }), 500
+    
+
+
+# Start processing thread
+processing_thread = threading.Thread(target=process_frames, daemon=True)
+processing_thread.start()
+
 
 @app.route('/send_video', methods=['POST'])
 def handle_video():
     if 'video' not in request.files:
-        return jsonify({"error": "No video file"}), 400
-    threading.Thread(target=process_video, args=(request.files['video'].read(),)).start()
-    return jsonify({"status": "processing"})
+        return jsonify({"error": "No video file provided"}), 400
+    
+    try:
+        image_bytes = request.files['video'].read()
+        if len(image_bytes) > 5 * 1024 * 1024:
+            return jsonify({"error": "File too large"}), 413
+            
+        image = Image.open(io.BytesIO(image_bytes))
+        frame = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        
+        try:
+            frame_queue.put(frame, block=False)
+        except queue.Full:
+            logger.warning("Frame queue full - dropping frame")
+            return jsonify({"status": "queued"})
+        
+        try:
+            result = result_queue.get_nowait()
+            socketio.emit('update', {
+                'engagement_score': result['engagement_score'],
+                'emotion': result['emotion'],
+                'positivity_score': result['positivity_score']
+            })
+            return jsonify(result)
+        except queue.Empty:
+            return jsonify({"status": "processing"})
+            
+    except Exception as e:
+        logger.error(f"Video endpoint error: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
+
+    
 @app.route('/analyze_response', methods=['POST'])
 def analyze_response():
     """Process the candidate's response and generate feedback."""
@@ -418,10 +776,20 @@ def analyze_response():
 
         # Gemini API prompt
         prompt = f"""
-        Analyze this interview question and response:
 
-        QUESTION: {question}
-        RESPONSE: {response}
+        You are an expert interview coach analyzing a mock interview. Follow these steps:
+
+        1. FIRST, correct this transcribed response:
+        - Fix grammar/syntax errors while preserving meaning
+        - Complete fragmented sentences
+        - Mark unclear parts with [?]
+        - Keep technical terms intact
+
+        RAW RESPONSE: {response}
+        2. THEN, provide feedback on the candidate's performance based on the following criteria against the question {question}:
+        - Technical knowledge and skills
+        - Communication skills
+        - Overall impression
 
         Provide feedback in this exact JSON format:
         {{
@@ -499,6 +867,57 @@ def get_current_question():
         "total": len(interview_questions)
     })
 
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
+    
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': 'Email already exists'}), 400
+        
+    new_user = User(
+        name=data['name'],
+        email=data['email'],
+        password=hashed_password
+    )
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({'message': 'Registered successfully'}), 201
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    user = User.query.filter_by(email=data['email']).first()
+    
+    if not user or not check_password_hash(user.password, data['password']):
+        return jsonify({'error': 'Invalid credentials'}), 401
+    
+    token = jwt.encode({
+        'user_id': user.id,
+        'exp': datetime.datetime.now() + datetime.timedelta(hours=24)
+    }, app.config['SECRET_KEY'])
+    
+    return jsonify({
+        'token': token,
+        'user_id': user.id,
+        'name': user.name
+    })
+
+@app.route('/api/check-auth', methods=['GET'])
+@token_required
+def check_auth(current_user):
+    return jsonify({
+        'authenticated': True,
+        'user_id': current_user.id,
+        'name': current_user.name
+    })
+
+
+
 if __name__ == '__main__':
-    # Disable reloader to avoid socket conflicts
-    socketio.run(app, debug=True, port=5000, use_reloader=False)
+    try:
+        socketio.run(app, debug=True, port=5000, use_reloader=False)
+    finally:
+        frame_queue.put(None)  # Signal processing thread to stop
+        processing_thread.join()
+        face_mesh.close()
